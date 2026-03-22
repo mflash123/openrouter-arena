@@ -2,7 +2,7 @@ import http from "http";
 import fs from "fs";
 import fetch from "node-fetch";
 
-const API_KEY = "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";
+const API_KEY = "your-openrouter-api-key";
 const BASE_URL = "https://openrouter.ai/api/v1";
 const PORT = 3000;
 
