@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compare Free Models from Openrouter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+  .header { padding: 16px 24px; background: #161b22; border-bottom: 1px solid #30363d; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header span { color: #8b949e; font-size: 13px; }
+  .input-area { padding: 16px 24px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; gap: 10px; }
+  textarea { flex: 1; background: #0d1117; border: 1px solid #30363d; color: #e6edf3; border-radius: 6px;
+    padding: 10px; font-size: 14px; resize: vertical; min-height: 60px; font-family: inherit; }
+  textarea:focus { outline: none; border-color: #58a6ff; }
+  button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 10px 20px;
+    font-size: 14px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+  button:hover { background: #2ea043; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { padding: 12px 24px; color: #8b949e; font-size: 13px; }
+  .results { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+  .card-header { padding: 10px 14px; background: #1c2128; display: flex; justify-content: space-between;
+    align-items: center; border-bottom: 1px solid #30363d; }
+  .card-header .model-name { font-weight: 600; font-size: 13px; color: #58a6ff; }
+  .card-header .time { font-size: 12px; color: #8b949e; }
+  .card-body { padding: 14px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .card-body.error { color: #f85149; }
+  .card-actions { padding: 6px 14px 10px; display: flex; gap: 8px; }
+  .card-actions button { background: #21262d; font-size: 12px; padding: 4px 10px; font-weight: 400; }
+  .card-actions button:hover { background: #30363d; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d;
+    border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .waiting { color: #8b949e; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <div>
+      <h1>Compare Free Models from Openrouter</h1>
+      <span id="modelCount">Loading models...</span>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+      <div style="background:#2d1b00; border:1px solid #d29922; border-radius:6px; padding:8px 14px; font-size:13px; color:#d29922; max-width:420px; line-height:1.5;">
+        ⚠️ <strong>OpenRouter free tier limit: 50 requests/day.</strong><br>
+        Each prompt is sent to <em>every</em> free model — think carefully before sending, as one prompt counts as many requests.
+      </div>
+      <div style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px 14px; font-size:13px; color:#8b949e; line-height:1.6; text-align:right;">
+        ❤️ <strong style="color:#e6edf3;">Support the creator:</strong>
+        <a href="https://x.com/mflash123" target="_blank" style="color:#58a6ff; text-decoration:none; margin-left:8px;">𝕏 @mflash123</a>
+        <span style="color:#30363d; margin:0 4px;">|</span>
+        <a href="https://boosty.to/mflash123" target="_blank" style="color:#f78166; text-decoration:none;">🔥 Boosty</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="input-area">
+  <textarea id="prompt" placeholder="Type your prompt here..." rows="3"></textarea>
+  <button id="sendBtn" onclick="send()" disabled>Send to All</button>
+</div>
+
+<div class="status" id="status"></div>
+<div class="results" id="results"></div>
+
+<script>
+let models = [];
+
+async function loadModels() {
+  const res = await fetch("/models");
+  models = await res.json();
+  document.getElementById("modelCount").textContent = `${models.length} free models loaded`;
+  document.getElementById("sendBtn").disabled = false;
+}
+
+function copyText(btn) {
+  const text = btn.closest(".card").querySelector(".card-body").textContent;
+  navigator.clipboard.writeText(text);
+  btn.textContent = "Copied!";
+  setTimeout(() => btn.textContent = "Copy", 1500);
+}
+
+async function send() {
+  const prompt = document.getElementById("prompt").value.trim();
+  if (!prompt) return;
+
+  const btn = document.getElementById("sendBtn");
+  btn.disabled = true;
+  btn.textContent = "Sending...";
+
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = "";
+  document.getElementById("status").innerHTML = `<span class="spinner"></span> Sending to ${models.length} models...`;
+
+  // Create placeholder cards for each model
+  const cards = {};
+  models.forEach((m) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="model-name">${m.name || m.id}</span>
+        <span class="time waiting">waiting...</span>
+      </div>
+      <div class="card-body waiting">Waiting for response...</div>
+    `;
+    resultsDiv.appendChild(card);
+    cards[m.id] = card;
+  });
+
+  // SSE
+  let done = 0;
+  const res = await fetch("/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, models }),
+  });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done: streamDone } = await reader.read();
+    if (streamDone) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6);
+      if (payload === "[DONE]") continue;
+
+      try {
+        const r = JSON.parse(payload);
+        done++;
+        const card = cards[r.model.id];
+        if (!card) continue;
+
+        card.querySelector(".time").textContent = `${r.elapsed}s`;
+        card.querySelector(".time").classList.remove("waiting");
+
+        const body = card.querySelector(".card-body");
+        body.classList.remove("waiting");
+
+        if (r.error) {
+          body.classList.add("error");
+          body.textContent = "Error: " + r.error;
+        } else {
+          body.textContent = r.text;
+          // Add copy button
+          let actions = card.querySelector(".card-actions");
+          if (!actions) {
+            actions = document.createElement("div");
+            actions.className = "card-actions";
+            actions.innerHTML = `<button onclick="copyText(this)">Copy</button>`;
+            card.appendChild(actions);
+          }
+        }
+
+        document.getElementById("status").innerHTML =
+          `<span class="spinner"></span> ${done}/${models.length} models responded`;
+      } catch (e) {}
+    }
+  }
+
+  document.getElementById("status").textContent = `Done — ${done}/${models.length} models responded`;
+  btn.disabled = false;
+  btn.textContent = "Send to All";
+}
+
+// Ctrl+Enter to send
+document.getElementById("prompt").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.ctrlKey) send();
+});
+
+loadModels();
+</script>
+</body>
+</html>
