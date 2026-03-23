@@ -2,6 +2,10 @@
 
 A simple web app that sends your prompt to **all free models** on [OpenRouter](https://openrouter.ai) at the same time, so you can compare their answers side by side and pick the best one.
 
+## Screenshot
+
+![App Screenshot](example.png)
+
 ## Features
 
 - Automatically fetches all currently available free models from OpenRouter
